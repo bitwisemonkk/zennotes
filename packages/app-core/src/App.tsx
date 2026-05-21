@@ -164,6 +164,11 @@ const EmptyVault = lazy(async () => {
   return { default: module.EmptyVault }
 })
 
+const OnboardingWizard = lazy(async () => {
+  const module = await import('./components/OnboardingWizard')
+  return { default: module.OnboardingWizard }
+})
+
 function EditorLoadingFallback(): JSX.Element {
   return <div className="min-w-0 flex-1 bg-paper-100" aria-label="Loading editor" />
 }
@@ -259,6 +264,7 @@ function App(): JSX.Element {
   const textFont = useStore((s) => s.textFont)
   const monoFont = useStore((s) => s.monoFont)
   const darkSidebar = useStore((s) => s.darkSidebar)
+  const hasCompletedOnboarding = useStore((s) => s.hasCompletedOnboarding)
   const persistWorkspace = useStore((s) => s.persistWorkspace)
   const flushDirtyNotes = useStore((s) => s.flushDirtyNotes)
   const activePinnedRefPath = useMemo(
@@ -586,6 +592,21 @@ function App(): JSX.Element {
     setSearchOpen,
     setVaultTextSearchOpen
   ])
+
+  if (!hasCompletedOnboarding) {
+    return (
+      <div className="h-screen w-screen bg-paper-100 text-ink-900">
+        {!zenMode && <TitleBar />}
+        <Suspense fallback={<div className="flex-1" />}>
+          <OnboardingWizard />
+        </Suspense>
+        <PromptHost />
+        <ConfirmHost />
+        <ServerDirectoryPickerHost />
+        <AppUpdateNotice hidden={zenMode} />
+      </div>
+    )
+  }
 
   if (!vault) {
     return (

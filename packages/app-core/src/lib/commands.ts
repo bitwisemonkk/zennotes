@@ -1177,6 +1177,13 @@ export function buildCommands(options?: { includeUnavailable?: boolean }): Comma
       run: () => getState().openHelpView()
     },
     {
+      id: 'app.onboarding.restart',
+      title: 'Show Onboarding Wizard',
+      category: 'App',
+      keywords: 'onboarding welcome wizard setup first-run getting started vim theme vault',
+      run: () => getState().restartOnboarding()
+    },
+    {
       id: 'app.settings',
       title: 'Open Settings',
       category: 'App',

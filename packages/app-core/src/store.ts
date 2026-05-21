@@ -280,6 +280,8 @@ interface Prefs {
   kanbanGroupBy: KanbanGroupBy
   /** Display-only Kanban column title overrides. Keyed by `${groupBy}:${columnId}`. */
   kanbanColumnTitles: Record<string, string>
+  /** True once the user has dismissed the first-run onboarding wizard. */
+  hasCompletedOnboarding: boolean
 }
 
 export type TasksViewMode = 'list' | 'calendar' | 'kanban'
@@ -368,7 +370,8 @@ const DEFAULT_PREFS: Prefs = {
   tagsCollapsed: false,
   tasksViewMode: 'list',
   kanbanGroupBy: 'status',
-  kanbanColumnTitles: {}
+  kanbanColumnTitles: {},
+  hasCompletedOnboarding: false
 }
 /** Coerce any loaded prefs blob into a valid Prefs object, dropping
  *  anything unknown (e.g. tokyo-night left over from earlier versions). */
@@ -554,13 +557,27 @@ function normalizePrefs(p: Partial<Prefs>): Prefs {
       p.kanbanGroupBy && VALID_KANBAN_GROUP_BYS.includes(p.kanbanGroupBy)
         ? p.kanbanGroupBy
         : DEFAULT_PREFS.kanbanGroupBy,
-    kanbanColumnTitles: normalizeKanbanColumnTitles(p.kanbanColumnTitles)
+    kanbanColumnTitles: normalizeKanbanColumnTitles(p.kanbanColumnTitles),
+    hasCompletedOnboarding:
+      typeof p.hasCompletedOnboarding === 'boolean'
+        ? p.hasCompletedOnboarding
+        : DEFAULT_PREFS.hasCompletedOnboarding
   }
 }
 function loadPrefs(): Prefs {
   try {
     const raw = localStorage.getItem(PREFS_KEY)
-    if (raw) return normalizePrefs(JSON.parse(raw) as Partial<Prefs>)
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<Prefs>
+      const normalized = normalizePrefs(parsed)
+      // Users upgrading from a version that didn't have the onboarding flag
+      // shouldn't be greeted with the wizard on next launch — treat the
+      // presence of an existing prefs blob as evidence they've been here.
+      if (typeof parsed.hasCompletedOnboarding !== 'boolean') {
+        normalized.hasCompletedOnboarding = true
+      }
+      return normalized
+    }
   } catch {
     /* ignore */
   }
@@ -950,6 +967,7 @@ function collectPrefs(s: {
   tasksViewMode: TasksViewMode
   kanbanGroupBy: KanbanGroupBy
   kanbanColumnTitles: Record<string, string>
+  hasCompletedOnboarding: boolean
 }): Prefs {
   return {
     vimMode: s.vimMode,
@@ -999,7 +1017,8 @@ function collectPrefs(s: {
     tagsCollapsed: s.tagsCollapsed,
     tasksViewMode: s.tasksViewMode,
     kanbanGroupBy: s.kanbanGroupBy,
-    kanbanColumnTitles: s.kanbanColumnTitles
+    kanbanColumnTitles: s.kanbanColumnTitles,
+    hasCompletedOnboarding: s.hasCompletedOnboarding
   }
 }
 
@@ -1379,6 +1398,8 @@ interface Store {
   kanbanGroupBy: KanbanGroupBy
   /** Display-only column title overrides for the Tasks Kanban view. */
   kanbanColumnTitles: Record<string, string>
+  /** True once the user has finished or skipped the first-run onboarding. */
+  hasCompletedOnboarding: boolean
   /** ISO YYYY-MM-DD currently selected in the Calendar view. null = today. */
   tasksCalendarSelectedDate: string | null
   /** First-of-month anchor (ISO YYYY-MM-01) for the Calendar view's grid. */
@@ -1568,6 +1589,10 @@ interface Store {
   setPdfEmbedInEditMode: (mode: 'compact' | 'full') => void
   setContentAlign: (align: 'center' | 'left') => void
   setTagsCollapsed: (collapsed: boolean) => void
+  /** Mark the first-run onboarding as complete (or skipped). Persists. */
+  completeOnboarding: () => void
+  /** Re-open the first-run onboarding wizard. Persists. */
+  restartOnboarding: () => void
   setFocusedPanel: (panel: Panel | null) => void
   setSidebarCursorIndex: (idx: number) => void
   setNoteListCursorIndex: (idx: number) => void
@@ -2378,6 +2403,7 @@ export const useStore = create<Store>((set, get) => {
   tasksViewMode: loadPrefs().tasksViewMode,
   kanbanGroupBy: loadPrefs().kanbanGroupBy,
   kanbanColumnTitles: loadPrefs().kanbanColumnTitles,
+  hasCompletedOnboarding: loadPrefs().hasCompletedOnboarding,
   vaultTasks: [],
   tasksLoading: false,
   tasksFilter: '',
@@ -3841,6 +3867,15 @@ export const useStore = create<Store>((set, get) => {
   },
   setTagsCollapsed: (collapsed) => {
     set({ tagsCollapsed: collapsed })
+    savePrefs(collectPrefs(get()))
+  },
+  completeOnboarding: () => {
+    if (get().hasCompletedOnboarding) return
+    set({ hasCompletedOnboarding: true })
+    savePrefs(collectPrefs(get()))
+  },
+  restartOnboarding: () => {
+    set({ hasCompletedOnboarding: false, settingsOpen: false })
     savePrefs(collectPrefs(get()))
   },
   setFocusedPanel: (panel) => set({ focusedPanel: panel }),
