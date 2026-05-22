@@ -36,6 +36,10 @@ const SIMPLE_HIDE = new Set([
   'CodeInfo'
 ])
 
+/** The `[ ]` or `[x]` marker inside a GFM task list item. Replaced by an
+ *  interactive checkbox widget — see `TaskCheckboxWidget` below. */
+const TASK_MARKER_NODE = 'TaskMarker'
+
 /** URL nodes need special handling: only hide when they are a link
  *  target `(url)`, not when they are autolinked text or appear inside
  *  a link label `[url](...)`. */
@@ -535,6 +539,66 @@ class LocalPdfWidget extends WidgetType {
   }
 }
 
+/** Renders a GFM task-list marker (`[ ]` / `[x]` / `[X]`) as a clickable
+ *  checkbox. The widget rewrites the underlying markdown when toggled — the
+ *  same single-character mutation the Preview pane uses, so the on-disk
+ *  source stays in lockstep regardless of which surface toggled it. */
+class TaskCheckboxWidget extends WidgetType {
+  constructor(
+    /** Absolute doc offset of the opening `[`. The marker is always 3
+     *  chars (`[ ]`, `[x]`, `[X]`), so the inner state char is at `from + 1`. */
+    private readonly from: number,
+    private readonly checked: boolean
+  ) {
+    super()
+  }
+
+  eq(other: TaskCheckboxWidget): boolean {
+    return other.from === this.from && other.checked === this.checked
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const wrap = document.createElement('span')
+    wrap.className = 'cm-task-checkbox'
+    wrap.setAttribute('contenteditable', 'false')
+
+    const input = document.createElement('input')
+    input.type = 'checkbox'
+    input.checked = this.checked
+    input.className = 'cm-task-checkbox-input'
+    input.setAttribute('aria-label', this.checked ? 'Uncheck task' : 'Check task')
+
+    // Stop the editor from moving the selection or losing focus on the
+    // pointer-down phase. Toggling on click keeps the cursor wherever
+    // the user had it before they reached for the checkbox.
+    input.addEventListener('mousedown', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+    })
+    input.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      // The state char sits at offset 1 inside the marker. Replace it in
+      // place — width stays 3, so no doc positions downstream shift.
+      const stateFrom = this.from + 1
+      const stateTo = this.from + 2
+      view.dispatch({
+        changes: { from: stateFrom, to: stateTo, insert: this.checked ? ' ' : 'x' }
+      })
+    })
+
+    wrap.append(input)
+    return wrap
+  }
+
+  // `false` lets DOM events bubble to our handler above. CodeMirror's
+  // default `ignoreEvent` skips events on widgets entirely, which would
+  // also swallow our click.
+  ignoreEvent(): boolean {
+    return false
+  }
+}
+
 function computeDecorations(view: EditorView): DecorationSet {
   const { state } = view
 
@@ -656,6 +720,28 @@ function computeDecorations(view: EditorView): DecorationSet {
         const isSimple = SIMPLE_HIDE.has(name)
         const isUrl = name === URL_NODE
         const isLinkSyntax = name === 'LinkMark' || isUrl
+
+        if (name === TASK_MARKER_NODE) {
+          const line = state.doc.lineAt(node.from).number
+          if (replacedLines.has(line)) return
+          // Reveal the raw `[ ]` / `[x]` so the user can edit it directly
+          // when the cursor lands inside the marker. Cursor elsewhere on
+          // the line still shows the checkbox — same model headings use
+          // for `#` markers.
+          if (selectionTouchesRange(state, node.from, node.to)) return
+          const markerText = state.doc.sliceString(node.from, node.to)
+          // `markerText` is `[ ]` / `[x]` / `[X]`; default to unchecked if the
+          // parser ever hands us something unexpected.
+          const checked = markerText.length >= 2 && /[xX]/.test(markerText[1] ?? '')
+          pending.push({
+            from: node.from,
+            to: node.to,
+            deco: Decoration.replace({
+              widget: new TaskCheckboxWidget(node.from, checked)
+            })
+          })
+          return
+        }
 
         // Only hide URL nodes that are link targets — preceded by `(`
         if (isUrl) {

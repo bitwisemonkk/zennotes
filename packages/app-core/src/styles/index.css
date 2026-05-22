@@ -1407,6 +1407,60 @@ textarea,
   outline-offset: 2px;
 }
 
+/* Live-preview task checkboxes: the `[ ]` / `[x]` marker on GFM task list
+   items is replaced by this widget when the cursor isn't on the marker. */
+.cm-editor .cm-task-checkbox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: text-bottom;
+  width: 1.05em;
+  height: 1.05em;
+  margin-right: 0.15em;
+}
+
+.cm-editor .cm-task-checkbox-input {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1em;
+  height: 1em;
+  margin: 0;
+  border: 1.5px solid rgb(var(--z-bg-3));
+  border-radius: 4px;
+  background: rgb(var(--z-bg));
+  cursor: pointer;
+  position: relative;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease;
+}
+
+.cm-editor .cm-task-checkbox-input:hover {
+  border-color: rgb(var(--z-accent) / 0.7);
+}
+
+.cm-editor .cm-task-checkbox-input:checked {
+  border-color: rgb(var(--z-accent));
+  background: rgb(var(--z-accent));
+}
+
+.cm-editor .cm-task-checkbox-input:checked::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 45%;
+  width: 0.32em;
+  height: 0.6em;
+  border: solid rgb(var(--z-bg));
+  border-width: 0 0.16em 0.16em 0;
+  transform: translate(-50%, -55%) rotate(45deg);
+}
+
+.cm-editor .cm-task-checkbox-input:focus-visible {
+  outline: 2px solid rgb(var(--z-accent) / 0.45);
+  outline-offset: 2px;
+}
+
 /* --- Search match highlights (`/` in vim, `Cmd+F`) -------------------- */
 /* The CodeMirror default uses a faint translucent yellow that disappears
    against the paper theme. Use the theme yellow so matches stay visible
