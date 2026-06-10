@@ -41,6 +41,7 @@ package() {
   # Install the unpacked app under /opt.
   install -dm755 "${pkgdir}/opt/${pkgname}"
   cp -a squashfs-root/. "${pkgdir}/opt/${pkgname}/"
+  chmod -R a+rX "${pkgdir}/opt/${pkgname}/"
 
   # `cp -a` re-applies the extracted squashfs root's mode (often 0700) onto
   # /opt/zennotes-bin, leaving the tree untraversable for non-root users — so
